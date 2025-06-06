@@ -12,7 +12,6 @@ import webbrowser
 import os
 from PIL import Image, ImageTk  
 
-# --- Configuración scraper Nike ---
 NIKE_CONFIG = {
     "name": "nike",
     "base_url": "https://www.nike.com/es",
