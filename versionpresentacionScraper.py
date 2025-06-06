@@ -198,20 +198,19 @@ class NikeScraper:
        return None
 
 
-   def search_products(self, query, country_code, max_price=None, size_filter=None, include_out_of_stock=False, max_pages=5):
+   def search_products(self, query, country_code, max_price=None, size_filter=None, max_pages=5):
        """
        Busca productos en Nike basado en una consulta.
       
        Args:
            query (str): Término de búsqueda
-           country_code (str): Código de país (ej: 'es', 'us')
-           max_price (float, optional): Precio máximo a filtrar
-           size_filter (str, optional): Talla específica a filtrar
-           include_out_of_stock (bool, optional): Incluir productos agotados
-           max_pages (int, optional): Número máximo de páginas a buscar (máx. 5)
-          
+           country_code (str): Código de país (ej: 'es', 'us', 'uk')
+           max_price (float, optional): Precio máximo
+           size_filter (str, optional): Talla para filtrar
+           max_pages (int, optional): Número máximo de páginas a buscar (por defecto 5)
+           
        Returns:
-           list: Lista de productos encontrados
+           list: Lista de productos encontrados (solo con stock disponible)
        """
        products = []
        country_info = None
@@ -279,7 +278,8 @@ class NikeScraper:
                        if size_filter and not self.has_size_available(product.get('sizes', []), size_filter):
                            continue
                           
-                       if not include_out_of_stock and not product.get('has_available_sizes', True):
+                       # Siempre excluir productos sin tallas disponibles
+                       if not product.get('has_available_sizes', True):
                            continue
                           
                        products.append(product)
@@ -388,6 +388,32 @@ class NikeScraper:
                {'tag': 'a', 'href': re.compile(r'/t/.*')},
                {'tag': 'div', 'class_': re.compile(r'.*name.*')}
            ]
+           
+           # 2. Verificar si es una zapatilla
+           is_shoe = False
+           shoe_keywords = ['zapatilla', 'zapato', 'shoe', 'sneaker', 'tenis', 'running', 'footwear', 'football', 'basketball', 'training']
+           
+           for selector in name_selectors:
+               try:
+                   if 'tag' in selector and 'class_' in selector:
+                       elem = card.find(selector['tag'], class_=selector['class_'])
+                   elif 'tag' in selector and 'attrs' in selector:
+                       elem = card.find(selector['tag'], **selector['attrs'])
+                   elif 'tag' in selector:
+                       elem = card.find(selector['tag'])
+                       
+                   if elem and elem.text.strip():
+                       name = elem.text.strip()
+                       # Verificar si el nombre contiene palabras clave de zapatillas
+                       if any(keyword in name.lower() for keyword in shoe_keywords):
+                           is_shoe = True
+                           break
+               except:
+                   continue
+                   
+           # Si no es una zapatilla, retornar None
+           if not is_shoe and name != 'Producto Nike':  # Si no se pudo determinar el nombre, asumir que es una zapatilla
+               return None
           
            for selector in name_selectors:
                try:
@@ -741,7 +767,7 @@ class NikeScraper:
 class NikeScraperGUI:
    def __init__(self, root):
        self.root = root
-       self.root.title("Nike Scraper - Extractor de Productos")
+       self.root.title("Nike Scraper - Made by Aran Casals - Proyecto Final INS Provençana")
        self.root.geometry("1000x700")
        self.scraper = NikeScraper()
        self.results = []
@@ -750,19 +776,22 @@ class NikeScraperGUI:
        self.show_welcome_message()
       
    def show_welcome_message(self):
-       """Muestra un mensaje de bienvenida con instrucciones"""
-       welcome_msg = """¡Bienvenido a Nike Scraper!
+       # Mostrar mensaje de bienvenida
+       welcome_msg = """Nike Scraper - Proyecto Final de Aran Casals
+       
+Bienvenido a Nike Scraper Pro - Proyecto Final de INS Provençana
 
+Este programa te permite buscar y extraer información de productos de Nike.
 
 Para comenzar:
-1. Escribe un término de búsqueda (ej: 'zapatillas')
+1. Escribe un término de búsqueda (ej: 'Air Max')
 2. Selecciona un país
-3. Opcional: Filtra por precio máximo y/o talla
-4. Haz clic en 'Buscar Productos'
+3. Opcional: Filtra por precio y talla
+4. Haz clic en 'Iniciar Búsqueda'
 
-
-Los resultados aparecerán en la tabla."""
-       messagebox.showinfo("Bienvenido a Nike Scraper Pro", welcome_msg)
+ 2025 Aran Casals - Todos los derechos reservados
+Proyecto Final - INS Provençana"""
+       messagebox.showinfo("Nike Scraper - Made by Aran Casals", welcome_msg)
       
    def setup_gui(self):
        """Configura la interfaz gráfica con un diseño moderno"""
@@ -893,19 +922,11 @@ Los resultados aparecerán en la tabla."""
        )
        self.size_entry.grid(row=1, column=5, sticky='w', padx=5, pady=5)
       
-       # Checkbox para incluir productos agotados
-       self.include_out_of_stock_var = tk.BooleanVar(value=False)
-       self.include_out_of_stock_cb = ttk.Checkbutton(
-           self.search_frame,
-           text="Incluir agotados",
-           variable=self.include_out_of_stock_var,
-           style='Small.TCheckbutton'
-       )
-       self.include_out_of_stock_cb.grid(row=1, column=6, sticky='w', padx=(20, 5), pady=5)
+       # No se incluye la opción de mostrar productos agotados
       
        # Fila 3: Botones de acción
        button_frame = ttk.Frame(self.search_frame, style='Card.TFrame')
-       button_frame.grid(row=2, column=0, columnspan=7, sticky='ew', pady=10, padx=5)
+       button_frame.grid(row=2, column=0, columnspan=6, sticky='ew', pady=10, padx=5)
       
        # Botón de búsqueda
        search_btn = ttk.Button(
@@ -1400,7 +1421,6 @@ Los resultados aparecerán en la tabla."""
                    pass
           
            size_filter = self.size_entry.get().strip() if self.size_entry.get().strip() else None
-           include_out_of_stock = self.include_out_of_stock_var.get()
           
            # Verificar si se detuvo la búsqueda antes de comenzar
            if self.search_stopped:
@@ -1410,13 +1430,12 @@ Los resultados aparecerán en la tabla."""
            # Realizar búsqueda
            self.root.after(0, lambda: self.status_var.set("Extrayendo datos de Nike..."))
           
-           # Llamar a search_products sin el parámetro should_stop_callback
+           # Llamar a search_products con los parámetros necesarios
            self.results = self.scraper.search_products(
-               product,
-               country_code,
-               max_price,
-               size_filter,
-               include_out_of_stock,
+               query=product,
+               country_code=country_code,
+               max_price=max_price,
+               size_filter=size_filter,
                max_pages=10
            )
           
@@ -1458,23 +1477,13 @@ Los resultados aparecerán en la tabla."""
           
        # Agregar nuevos resultados
        for product in self.results:
-           # Verificar si hay tallas disponibles
-           available_sizes = product.get('available_sizes', [])
-           has_available_sizes = bool(available_sizes)
-          
            # Obtener la URL del producto
            product_url = product.get('url', '')
           
-           # Filtrar productos sin URL o con valor 'N/A' en cualquier campo
-           if not product_url or product_url == 'N/A':
-               continue
-              
-           # Solo mostrar productos con tallas disponibles
-           if not has_available_sizes:
-               continue
-              
-           # Verificar si hay algún campo con valor 'N/A'
-           if any(str(v).upper() == 'N/A' for v in product.values() if v is not None):
+           # Filtrar productos sin URL, sin tallas disponibles o con valor 'N/A' en cualquier campo
+           if (not product_url or product_url == 'N/A' or 
+               not product.get('available_sizes') or 
+               any(str(v).upper() == 'N/A' for v in product.values() if v is not None)):
                continue
               
            total_count += 1
@@ -1483,7 +1492,8 @@ Los resultados aparecerán en la tabla."""
            # Formatear precio
            price = f"{product.get('price', '')}"
           
-           # Formatear tallas disponibles
+           # Obtener y formatear tallas disponibles
+           available_sizes = product.get('available_sizes', [])
            available_sizes_str = ", ".join(str(size) for size in available_sizes if str(size).upper() != 'N/A')
           
            # Insertar en el Treeview
